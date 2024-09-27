@@ -1,5 +1,6 @@
 use clap::{Arg, Command};
 
+// NOTE: i will handle getting query in the main function itself
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let matches = Command::new("My Program")
@@ -32,34 +33,44 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .get_matches();
 
-    // let value = if let Some(matches) = matches.subcommand_matches("search") {
-    //     matches.get_one::<String>("SEARCH").unwrap()
-    // } else if let Some(matches) = matches.subcommand_matches("info") {
-    //     matches.get_one::<String>("INFO").unwrap()
-    // } else if let Some(matches) = matches.subcommand_matches("download") {
-    //     matches.get_one::<String>("DOWNLOAD").unwrap()
-    // } else {
-    //     println!("No command was used");
-    //     return;
-    // };
-    //
-    let mut value = String::new();
-    if let Some(matches) = matches.subcommand_matches("search") {
-        value = matches.get_one::<String>("SEARCH").unwrap().to_owned();
+    match matches.subcommand() {
+        Some(("search", matching)) => {
+            let res = fetch_manga_with_similar_names(
+                matching
+                    .get_one::<String>("SEARCH")
+                    .expect("expected a search arguement")
+                    .to_owned(),
+            )
+            .await;
 
-        let _res = fetch_manga_with_similar_names(&value).await?;
-    } else if let Some(matches) = matches.subcommand_matches("info") {
-        value = matches.get_one::<String>("INFO").unwrap().to_owned();
-    } else if let Some(matches) = matches.subcommand_matches("download") {
-        value = matches.get_one::<String>("DOWNLOAD").unwrap().to_owned();
+            match res {
+                Ok(out) => {
+                    let val: serde_json::Value = serde_json::from_str(&out).expect("string to json failed");
+                    println!("{:#?}", val);
+                },
+                Err(e) => {
+                    eprintln!("the error you got is {e}");
+                }
+            }
+        }
+        Some(("info", matching)) => {
+            println!("{}", matching.get_one::<String>("INFO").unwrap().to_owned())
+        }
+        Some(("download", matching)) => println!(
+            "{}",
+            matching.get_one::<String>("DOWNLOAD").unwrap().to_owned()
+        ),
+        Some((name, _matching)) => println!("unimplemented: {:?}", name),
+        None => unreachable!("subcommand required"),
     }
 
-    println!("The value is: {}", value);
     return Ok(());
 }
 
 #[allow(dead_code)]
-async fn fetch_manga_with_similar_names(query: &str) -> Result<(), Box<dyn std::error::Error>> {
+async fn fetch_manga_with_similar_names(
+    query: String,
+) -> Result<String, Box<dyn std::error::Error>> {
     let client = reqwest::Client::new();
     let url = format!(
         "https://api.comick.fun/v1.0/search?q={}&tachiyomi=true",
@@ -69,17 +80,31 @@ async fn fetch_manga_with_similar_names(query: &str) -> Result<(), Box<dyn std::
     let res = client.get(&url).headers(header).send().await?;
 
     match res.status() {
-        reqwest::StatusCode::OK => println!("i got something"),
-        reqwest::StatusCode::FORBIDDEN => println!("it is saying forbidden"),
-        _ => println!("i don't care"),
+        reqwest::StatusCode::OK => {
+            println!("Successfully received a response");
+            let text = res.text().await?;
+            return Ok(text);
+        }
+        reqwest::StatusCode::FORBIDDEN => {
+            eprintln!("Access forbidden: Check your headers or API access.");
+        }
+        reqwest::StatusCode::NOT_FOUND => {
+            eprintln!("Manga not found.");
+        }
+        _ => {
+            eprintln!("Unexpected response status: {}", res.status());
+        }
     }
-    return Ok(());
+    return Ok(res.json().await?);
 }
 
 #[allow(dead_code)]
 fn headers() -> reqwest::header::HeaderMap {
     let mut header = reqwest::header::HeaderMap::new();
-    header.insert("User-Agent", reqwest::header::HeaderValue::from_static("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"));
+    header.insert(
+        "User-Agent",
+        reqwest::header::HeaderValue::from_static("HTTPie/3.2.3"),
+    );
     header.insert(
         "Accept",
         reqwest::header::HeaderValue::from_static("application/json, text/plain, */*"),
