@@ -1,7 +1,12 @@
 use clap::{Arg, Command};
-mod models;
 mod apis;
+mod models;
 use std::io::Write;
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct Chapters {
+    chapters: Vec<models::Chapter>,
+}
 
 // NOTE: i will handle getting query in the main function itself
 
@@ -55,7 +60,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     match give_selected_manga_hid(&vec_mangas) {
                         Some(hid) => {
                             // as it returns Option<Vec<String>> handle it nigga
-                            get_all_chapter_hid_given_manga_hid(&hid).await;
+                            match get_all_chapter_hid_given_manga_hid(&hid).await {
+                                Some(chapter_hids) => {dbg!(chapter_hids);},
+                                None => {dbg!("no chapters");},
+                            }
                             // println!("chapter hids: {:?}", chapter_hids);
                         }
                         None => println!("no patterns matched"),
@@ -81,18 +89,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[allow(dead_code)]
-async fn get_all_chapter_hid_given_manga_hid(manga_hid: &String) /*  -> Option<Vec<String>>  */
-{
+async fn get_all_chapter_hid_given_manga_hid(manga_hid: &String) -> Option<Vec<String>> {
+    let mut chapter_hid_array: Vec<String> = Vec::new();
     let url = format!(
         "https://api.comick.fun/comic/{}/chapters?lang=en&limit=99999&tachiyomi=true",
         manga_hid
     );
     let client = reqwest::Client::new();
     let header = headers();
-    let res = client.get(&url).headers(header).send().await.expect("got error while requesting get method on url while getting chapter hids");
-    let json: serde_json::Value = res.json().await.unwrap();
-    // println!("{:#?}", json);
-    let chapter_array: Vec<models::Chapters> = json.get("chapters");
+    let res = client
+        .get(&url)
+        .headers(header)
+        .send()
+        .await
+        .expect("got error while requesting get method on url while getting chapter hids");
+    let res = res
+        .json::<serde_json::Value>()
+        .await
+        .expect("not able to get body")
+        .to_string();
+    let chapters: Chapters = serde_json::from_str(&res).expect("failed to convert to chapters");
+    for ch in chapters.chapters {
+        chapter_hid_array.push(ch.hid);
+    }
+
+    match chapter_hid_array.len() {
+        n if n > 0 => return Some(chapter_hid_array),
+        _ => return None,
+    }
 }
 
 #[allow(dead_code)]
