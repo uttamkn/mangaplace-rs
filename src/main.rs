@@ -1,6 +1,9 @@
 use clap::{Arg, Command};
+mod models;
+use std::io::Write;
 
 // NOTE: i will handle getting query in the main function itself
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let matches = Command::new("My Program")
@@ -35,7 +38,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match matches.subcommand() {
         Some(("search", matching)) => {
-            let res = fetch_manga_with_similar_names(
+            let res = fetch_manga_with_similar_names_as_json(
                 matching
                     .get_one::<String>("SEARCH")
                     .expect("expected a search arguement")
@@ -44,12 +47,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .await;
 
             match res {
-                Ok(out) => {
-                    let val: serde_json::Value = serde_json::from_str(&out).expect("string to json failed");
-                    println!("{:#?}", val);
-                },
+                Ok(full_json) => {
+
+                    let vec_mangas: Vec<models::Manga> = serde_json::from_str(&full_json)
+                        .expect("cannot convert from string to manga type");
+
+                    match give_selected_manga_hid(&vec_mangas) {
+                        Some(hid) => println!("hid: {hid}"),
+                        None => println!("no patterns matched"),
+                    }
+                }
                 Err(e) => {
-                    eprintln!("the error you got is {e}");
+                    eprintln!("the error you got is : {e}");
                 }
             }
         }
@@ -67,8 +76,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     return Ok(());
 }
 
+// #[allow(dead_code)]
+// async fn get_all_chapter_hid_given_manga_hid(manga_hid: &String) -> Option<Vec<String>> {
+// }
+
 #[allow(dead_code)]
-async fn fetch_manga_with_similar_names(
+async fn fetch_manga_with_similar_names_as_json(
     query: String,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let client = reqwest::Client::new();
@@ -89,13 +102,46 @@ async fn fetch_manga_with_similar_names(
             eprintln!("Access forbidden: Check your headers or API access.");
         }
         reqwest::StatusCode::NOT_FOUND => {
-            eprintln!("Manga not found.");
+            eprintln!("statuscode not found");
         }
         _ => {
             eprintln!("Unexpected response status: {}", res.status());
         }
     }
     return Ok(res.json().await?);
+}
+
+// this is supposed to take a vector of manga type and returns the hid of the selected manga
+#[allow(dead_code)]
+fn give_selected_manga_hid(mangas: &Vec<models::Manga>) -> Option<String> {
+    let mut id = String::new();
+
+    match mangas.len() {
+        n if n > 0 => {
+            for (i, a) in mangas.iter().enumerate() {
+                println!("id: {i}, title: {}", a.title);
+            }
+
+            print!(
+                "give the id of the manga you want to download between {} to {}: ",
+                0,
+                mangas.len() - 1
+            );
+
+            std::io::stdout().flush().expect("not able to flush");
+
+            std::io::stdin()
+                .read_line(&mut id)
+                .expect("not able to read the id");
+            let id: usize = id.trim().parse().expect("give a positive number for id");
+
+            return Some(mangas[id].hid.clone());
+        }
+
+        n if n == 0 => return None,
+
+        _ => return None,
+    }
 }
 
 #[allow(dead_code)]

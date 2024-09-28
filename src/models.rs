@@ -1,8 +1,7 @@
-use serde::{Deserialize, Serialize};
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct Manga {
-    id: i32,
-    hid: String,
-    title: String,
-    desc: Option<String>,
+    pub id: i32,
+    pub hid: String,
+    pub title: String,
+    pub desc: Option<String>,
 }
