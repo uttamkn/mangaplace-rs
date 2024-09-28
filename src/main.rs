@@ -55,8 +55,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     match give_selected_manga_hid(&vec_mangas) {
                         Some(hid) => {
                             // as it returns Option<Vec<String>> handle it nigga
-                            let chapter_hids = get_all_chapter_hid_given_manga_hid(&hid).await;
-                            println!("chapter hids: {:?}", chapter_hids);
+                            get_all_chapter_hid_given_manga_hid(&hid).await;
+                            // println!("chapter hids: {:?}", chapter_hids);
                         }
                         None => println!("no patterns matched"),
                     }
@@ -89,8 +89,10 @@ async fn get_all_chapter_hid_given_manga_hid(manga_hid: &String) /*  -> Option<V
     );
     let client = reqwest::Client::new();
     let header = headers();
-    let res = client.get(&url).headers(header).send().await;
-    let json = res.json();
+    let res = client.get(&url).headers(header).send().await.expect("got error while requesting get method on url while getting chapter hids");
+    let json: serde_json::Value = res.json().await.unwrap();
+    // println!("{:#?}", json);
+    let chapter_array: Vec<models::Chapters> = json.get("chapters");
 }
 
 #[allow(dead_code)]
