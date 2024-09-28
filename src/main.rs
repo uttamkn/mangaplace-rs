@@ -1,5 +1,6 @@
 use clap::{Arg, Command};
 mod models;
+mod apis;
 use std::io::Write;
 
 // NOTE: i will handle getting query in the main function itself
@@ -48,12 +49,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             match res {
                 Ok(full_json) => {
-
                     let vec_mangas: Vec<models::Manga> = serde_json::from_str(&full_json)
                         .expect("cannot convert from string to manga type");
 
                     match give_selected_manga_hid(&vec_mangas) {
-                        Some(hid) => println!("hid: {hid}"),
+                        Some(hid) => {
+                            // as it returns Option<Vec<String>> handle it nigga
+                            let chapter_hids = get_all_chapter_hid_given_manga_hid(&hid).await;
+                            println!("chapter hids: {:?}", chapter_hids);
+                        }
                         None => println!("no patterns matched"),
                     }
                 }
@@ -76,9 +80,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     return Ok(());
 }
 
-// #[allow(dead_code)]
-// async fn get_all_chapter_hid_given_manga_hid(manga_hid: &String) -> Option<Vec<String>> {
-// }
+#[allow(dead_code)]
+async fn get_all_chapter_hid_given_manga_hid(manga_hid: &String) /*  -> Option<Vec<String>>  */
+{
+    let url = format!(
+        "https://api.comick.fun/comic/{}/chapters?lang=en&limit=99999&tachiyomi=true",
+        manga_hid
+    );
+    let client = reqwest::Client::new();
+    let header = headers();
+    let res = client.get(&url).headers(header).send().await;
+    let json = res.json();
+}
 
 #[allow(dead_code)]
 async fn fetch_manga_with_similar_names_as_json(
